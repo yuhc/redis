@@ -79,6 +79,7 @@ static struct config {
     char *tests;
     char *auth;
     int continuous;
+    int jump;
 } config;
 
 typedef struct _client {
@@ -163,11 +164,12 @@ static void randomizeClientKey(client c) {
 		 : (random() % config.randomkeys_keyspacelen);
         size_t j;
 
-        for (j = 0; j < 12; j++) {
-            *p = '0'+r%10;
-            r/=10;
-            p--;
-        }
+        for (j = 0; j < 12; j++)
+            if (!config.jump || (j&1)==0) {
+                *p = '0'+r%10;
+                r/=10;
+                p--;
+            }
     }
 }
 
@@ -538,12 +540,15 @@ int parseOptions(int argc, const char **argv) {
         } else if (!strcmp(argv[i],"--help")) {
             exit_status = 0;
             goto usage;
-	} else if (!strcmp(argv[i], "--continuous")) {
+	    } else if (!strcmp(argv[i], "--continuous")) {
 	    /* The format should be "--continuous" with "-r range". Then
              * benchmark will perform set/del from "0" to the `range-1`.
              */
             config.continuous = 1;
-        } else {
+        } else if (!strcmp(argv[i], "--jump")) {
+            config.jump = 1;
+        }
+        else {
             /* Assume the user meant to provide an option when the arg starts
              * with a dash. We're done otherwise and should use the remainder
              * as the command and arguments for running the benchmark. */
@@ -671,6 +676,7 @@ int main(int argc, const char **argv) {
     config.dbnum = 0;
     config.auth = NULL;
     config.continuous = 0;
+    config.jump = 0;
 
     i = parseOptions(argc,argv);
     argc -= i;
@@ -731,6 +737,12 @@ int main(int argc, const char **argv) {
         if (test_is_selected("get")) {
             len = redisFormatCommand(&cmd,"GET key:__rand_int__");
             benchmark("GET",cmd,len);
+            free(cmd);
+        }
+
+        if (test_is_selected("del")) {
+            len = redisFormatCommand(&cmd,"DEL key:__rand_int__");
+            benchmark("DEL",cmd,len);
             free(cmd);
         }
 
